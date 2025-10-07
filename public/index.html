@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>旅行記SNS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <style>
+        html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; font-family: 'Inter', sans-serif; }
+        #map { height: 100%; width: 100%; z-index: 10; }
+        .leaflet-popup-content-wrapper { border-radius: 8px; }
+        .modal-overlay { z-index: 40; }
+        .modal-content { z-index: 50; }
+        header { z-index: 30; }
+        footer { z-index: 20; }
+        main { z-index: 10; }
+        .pulse { animation: pulse-animation 2s infinite; }
+        @keyframes pulse-animation {
+            0% { box-shadow: 0 0 0 0 rgba(0, 128, 255, 0.7); }
+            70% { box-shadow: 0 0 0 20px rgba(0, 128, 255, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(0, 128, 255, 0); }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex flex-col h-screen">
+
+    <!-- Header -->
+    <header class="bg-gray-800/80 backdrop-blur-sm shadow-lg absolute top-0 left-0 right-0 p-4 flex justify-between items-center">
+        <h1 class="text-xl font-bold">Travel Log SNS</h1>
+        <div class="flex items-center space-x-4">
+            <div id="user-info" class="hidden items-center"></div>
+            <button id="show-all-btn" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg transition duration-300">すべての投稿</button>
+            <button id="new-post-btn" class="hidden bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded-lg transition duration-300">新規投稿</button>
+            <button id="login-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-4 rounded-lg transition duration-300">ログイン</button>
+            <button id="register-btn" class="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded-lg transition duration-300">登録</button>
+            <button id="logout-btn" class="hidden bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-4 rounded-lg transition duration-300">ログアウト</button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow relative">
+        <div id="map"></div>
+    </main>
+
+    <!-- Footer Timeline Slider -->
+    <footer class="bg-gray-800/80 backdrop-blur-sm shadow-lg absolute bottom-0 left-0 right-0 p-4">
+        <div class="max-w-4xl mx-auto">
+            <label for="timeline" class="block mb-2 text-sm font-medium text-center">タイムライン: <span id="timeline-date">最新</span></label>
+            <input id="timeline" type="range" min="0" max="100" value="100" class="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer">
+        </div>
+    </footer>
+
+    <!-- Modals -->
+    <!-- Login Modal -->
+    <div id="login-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center modal-overlay">
+        <div class="modal-content bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-md">
+            <h2 class="text-2xl font-bold mb-6 text-center">ログイン</h2>
+            <form id="login-form">
+                <input type="text" id="login-username" placeholder="ユーザー名" class="w-full bg-gray-700 text-white p-3 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                <input type="password" id="login-password" placeholder="パスワード" class="w-full bg-gray-700 text-white p-3 rounded-lg mb-6 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 px-4 rounded-lg transition duration-300">ログイン</button>
+            </form>
+            <button class="modal-close absolute top-4 right-4 text-gray-400 hover:text-white">&times;</button>
+        </div>
+    </div>
+    
+    <!-- Register Modal -->
+    <div id="register-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center modal-overlay">
+        <div class="modal-content bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-md">
+            <h2 class="text-2xl font-bold mb-6 text-center">新規登録</h2>
+            <form id="register-form">
+                <input type="text" id="register-username" placeholder="ユーザー名" class="w-full bg-gray-700 text-white p-3 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                <input type="password" id="register-password" placeholder="パスワード" class="w-full bg-gray-700 text-white p-3 rounded-lg mb-6 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                <button type="submit" class="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-3 px-4 rounded-lg transition duration-300">登録</button>
+            </form>
+             <button class="modal-close absolute top-4 right-4 text-gray-400 hover:text-white">&times;</button>
+        </div>
+    </div>
+
+    <!-- New Post Modal -->
+    <div id="new-post-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center modal-overlay">
+        <div class="modal-content bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-lg">
+            <h2 class="text-2xl font-bold mb-6 text-center">新規投稿を作成</h2>
+            <form id="new-post-form">
+                <div class="mb-4">
+                    <label class="block mb-2 text-sm font-medium">写真</label>
+                    <input type="file" id="post-image-file" accept="image/*" class="w-full bg-gray-700 text-white p-3 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" required>
+                    <img id="image-preview" src="" class="hidden mt-4 max-h-40 rounded-lg"/>
+                </div>
+                <textarea id="post-text" placeholder="旅行の思い出を書きましょう..." rows="4" class="w-full bg-gray-700 text-white p-3 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500" required></textarea>
+                <input type="text" id="post-lat" placeholder="緯度" class="w-full bg-gray-700 text-white p-3 rounded-lg mb-4" required readonly>
+                <input type="text" id="post-lng" placeholder="経度" class="w-full bg-gray-700 text-white p-3 rounded-lg mb-4" required readonly>
+                <button type="button" id="get-location-btn" class="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-4 rounded-lg transition duration-300 mb-4">現在地を取得</button>
+                <p class="text-sm text-center text-gray-400 mb-4">または、地図上をクリックして場所を選択してください。</p>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-lg transition duration-300">投稿する</button>
+            </form>
+            <button class="modal-close absolute top-4 right-4 text-gray-400 hover:text-white">&times;</button>
+        </div>
+    </div>
+
+    <!-- Post Detail Modal -->
+    <div id="post-detail-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center modal-overlay">
+        <div id="post-detail-content" class="modal-content bg-gray-800 rounded-lg shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+            <!-- Content will be injected by JavaScript -->
+        </div>
+    </div>
+
+
+    <script>
+        const map = L.map('map').setView([35.6895, 139.6917], 5); // Initial view on Tokyo
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        let allPosts = [];
+        let markers = [];
+
+        // --- Helper Functions ---
+        const openModal = (id) => document.getElementById(id).classList.remove('hidden');
+        const closeModal = (id) => document.getElementById(id).classList.add('hidden');
+
+        /**
+         * JWTトークンを安全に解析する
+         * @param {string} token - JWTトークン
+         * @returns {object|null} - 解析されたペイロード、または失敗した場合はnull
+         */
+        function parseJwt(token) {
+            try {
+                const base64Url = token.split('.')[1];
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                }).join(''));
+                return JSON.parse(jsonPayload);
+            } catch (e) {
+                console.error("無効なトークンです:", e);
+                return null;
+            }
+        }
+
+        /** ログアウト状態のUIに更新する */
+        function updateUIForLogout() {
+            document.getElementById('user-info').innerHTML = '';
+            document.getElementById('login-btn').classList.remove('hidden');
+            document.getElementById('register-btn').classList.remove('hidden');
+            document.getElementById('new-post-btn').classList.add('hidden');
+            document.getElementById('logout-btn').classList.add('hidden');
+            document.getElementById('user-info').classList.add('hidden');
+        }
+        
+        /** ログイン状態に応じてUIを更新する */
+        function updateUIForLogin() {
+            const token = localStorage.getItem('token');
+            if (token) {
+                const payload = parseJwt(token);
+                if (payload) {
+                    // Logged in
+                    document.getElementById('user-info').innerHTML = `
+                        <img src="${payload.avatar_url}" alt="${payload.username}" class="w-8 h-8 rounded-full mr-2">
+                        <span>${payload.username}</span>
+                    `;
+                    document.getElementById('login-btn').classList.add('hidden');
+                    document.getElementById('register-btn').classList.add('hidden');
+                    document.getElementById('new-post-btn').classList.remove('hidden');
+                    document.getElementById('logout-btn').classList.remove('hidden');
+                    document.getElementById('user-info').classList.remove('hidden');
+                } else {
+                    // Invalid token found
+                    localStorage.removeItem('token');
+                    updateUIForLogout();
+                }
+            } else {
+                // Logged out
+                updateUIForLogout();
+            }
+        }
+
+        // --- API Functions ---
+        async function fetchPosts() {
+            try {
+                const response = await fetch('/api/posts');
+                if (!response.ok) throw new Error('投稿の取得に失敗しました。');
+                allPosts = await response.json();
+                allPosts.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+                updateMarkers(100);
+            } catch (error) {
+                console.error(error);
+                alert(error.message);
+            }
+        }
+
+        // --- Marker and Timeline Functions ---
+        function updateMarkers(percentage) {
+            markers.forEach(marker => map.removeLayer(marker));
+            markers = [];
+
+            const postCount = Math.ceil(allPosts.length * (percentage / 100));
+            const postsToShow = allPosts.slice(0, postCount);
+            
+            if (postsToShow.length > 0) {
+                 const latestPostDate = new Date(postsToShow[postsToShow.length - 1].timestamp);
+                 document.getElementById('timeline-date').textContent = latestPostDate.toLocaleDateString();
+            } else {
+                 document.getElementById('timeline-date').textContent = "投稿がありません";
+            }
+
+            postsToShow.forEach((post, index) => {
+                const isLatest = index === postsToShow.length - 1;
+                const iconHtml = `<div class="relative w-10 h-10">
+                    <img src="${post.image_url}" class="w-10 h-10 rounded-full border-2 border-white object-cover shadow-lg">
+                    ${isLatest ? '<div class="absolute top-0 left-0 w-full h-full rounded-full pulse border-2 border-blue-400"></div>' : ''}
+                </div>`;
+                
+                const customIcon = L.divIcon({
+                    html: iconHtml,
+                    className: 'custom-div-icon',
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 20]
+                });
+
+                const marker = L.marker([post.lat, post.lng], { icon: customIcon }).addTo(map);
+                marker.on('click', () => showPostDetail(post.id));
+                markers.push(marker);
+            });
+        }
+        
+        // --- Modal Content ---
+        async function showPostDetail(postId) {
+            try {
+                const post = allPosts.find(p => p.id === postId);
+                const commentsResponse = await fetch(`/api/posts/${postId}/comments`);
+                const comments = await commentsResponse.json();
+
+                let commentsHtml = comments.map(c => `
+                    <div class="flex items-start space-x-3 py-3">
+                        <img src="${c.user_avatar}" class="w-8 h-8 rounded-full">
+                        <div>
+                            <p class="font-semibold text-sm">${c.user_name}</p>
+                            <p class="text-gray-300">${c.text}</p>
+                        </div>
+                    </div>
+                `).join('');
+
+                const contentDiv = document.getElementById('post-detail-content');
+                contentDiv.innerHTML = `
+                    <img src="${post.image_url}" class="w-full h-64 object-cover rounded-t-lg">
+                    <div class="p-6 flex-grow overflow-y-auto">
+                        <div class="flex items-center mb-4">
+                            <img src="${post.user_avatar}" class="w-12 h-12 rounded-full mr-4">
+                            <div>
+                                <h3 class="text-xl font-bold">${post.user_name}</h3>
+                                <p class="text-sm text-gray-400">${new Date(post.timestamp).toLocaleString()}</p>
+                            </div>
+                        </div>
+                        <p class="text-gray-200 mb-6">${post.text}</p>
+                        <hr class="border-gray-600 my-4">
+                        <h4 class="font-bold mb-2">コメント</h4>
+                        <div id="comments-container">${commentsHtml}</div>
+                    </div>
+                    <div class="p-4 border-t border-gray-700">
+                        <form id="comment-form" data-post-id="${postId}">
+                            <input type="text" id="comment-text" placeholder="コメントを追加..." class="w-full bg-gray-700 text-white p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                        </form>
+                    </div>
+                    <button class="modal-close absolute top-2 right-2 text-white bg-black bg-opacity-50 rounded-full p-1 leading-none">&times;</button>
+                `;
+                openModal('post-detail-modal');
+
+                document.getElementById('comment-form').addEventListener('submit', handleCommentSubmit);
+                document.querySelector('#post-detail-modal .modal-close').addEventListener('click', () => closeModal('post-detail-modal'));
+
+            } catch (error) {
+                console.error("詳細の表示に失敗:", error);
+                alert('投稿詳細の取得に失敗しました。');
+            }
+        }
+
+        async function handleCommentSubmit(event) {
+            event.preventDefault();
+            const token = localStorage.getItem('token');
+            if (!token) return alert('コメントするにはログインが必要です。');
+
+            const postId = event.target.dataset.postId;
+            const text = document.getElementById('comment-text').value;
+
+            try {
+                const response = await fetch(`/api/posts/${postId}/comments`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ text })
+                });
+                if (!response.ok) throw new Error('コメント投稿に失敗しました。');
+                document.getElementById('comment-text').value = '';
+                showPostDetail(parseInt(postId));
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        // --- Event Listeners ---
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchPosts();
+            updateUIForLogin();
+        });
+
+        document.getElementById('timeline').addEventListener('input', (e) => {
+            updateMarkers(e.target.value);
+        });
+
+        // Modal Open/Close Listeners
+        document.getElementById('login-btn').addEventListener('click', () => openModal('login-modal'));
+        document.getElementById('register-btn').addEventListener('click', () => openModal('register-modal'));
+        document.getElementById('new-post-btn').addEventListener('click', () => openModal('new-post-modal'));
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            localStorage.removeItem('token');
+            updateUIForLogin(); // UIをログアウト状態に更新
+            alert('ログアウトしました。');
+        });
+
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    closeModal(overlay.id);
+                }
+            });
+        });
+        document.querySelectorAll('.modal-close').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const modal = btn.closest('.modal-overlay');
+                if(modal) closeModal(modal.id);
+            });
+        });
+
+        // --- Form Submissions ---
+        document.getElementById('register-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('register-username').value;
+            const password = document.getElementById('register-password').value;
+            try {
+                const response = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error);
+                alert('登録が成功しました！ログインしてください。');
+                closeModal('register-modal');
+            } catch (error) {
+                alert(`登録失敗: ${error.message}`);
+            }
+        });
+
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error);
+                
+                localStorage.setItem('token', data.accessToken);
+                closeModal('login-modal');
+                updateUIForLogin();
+            } catch (error) {
+                alert(`ログイン失敗: ${error.message}`);
+            }
+        });
+
+        document.getElementById('new-post-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const token = localStorage.getItem('token');
+            if (!token) return alert('投稿するにはログインが必要です。');
+
+            const image_url = document.getElementById('image-preview').src;
+            const text = document.getElementById('post-text').value;
+            const lat = document.getElementById('post-lat').value;
+            const lng = document.getElementById('post-lng').value;
+            
+            try {
+                const response = await fetch('/api/posts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ image_url, text, lat, lng })
+                });
+                if (!response.ok) throw new Error('投稿に失敗しました。');
+                closeModal('new-post-modal');
+                fetchPosts(); // 投稿後にリストを更新
+            } catch (error) {
+                alert(error.message);
+            }
+        });
+
+        // --- Geolocation and Image Compression ---
+        document.getElementById('get-location-btn').addEventListener('click', () => {
+            if ('geolocation' in navigator) {
+                navigator.geolocation.getCurrentPosition(position => {
+                    const { latitude, longitude } = position.coords;
+                    document.getElementById('post-lat').value = latitude.toFixed(6);
+                    document.getElementById('post-lng').value = longitude.toFixed(6);
+                    map.setView([latitude, longitude], 13);
+                }, error => {
+                    alert(`位置情報の取得に失敗しました: ${error.message}`);
+                    console.error(error);
+                });
+            } else {
+                alert('お使いのブラウザはGeolocation APIをサポートしていません。');
+            }
+        });
+
+        map.on('click', function(e) {
+            if (document.getElementById('new-post-modal').classList.contains('hidden')) return;
+            document.getElementById('post-lat').value = e.latlng.lat.toFixed(6);
+            document.getElementById('post-lng').value = e.latlng.lng.toFixed(6);
+        });
+
+        document.getElementById('post-image-file').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 800;
+                    const scaleSize = MAX_WIDTH / img.width;
+                    canvas.width = MAX_WIDTH;
+                    canvas.height = img.height * scaleSize;
+
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                    document.getElementById('image-preview').src = dataUrl;
+                    document.getElementById('image-preview').classList.remove('hidden');
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        document.getElementById('show-all-btn').addEventListener('click', fetchPosts);
+
+    </script>
+</body>
+</html>
+
