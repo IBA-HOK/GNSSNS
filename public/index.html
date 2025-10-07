@@ -493,16 +493,33 @@
                 const latRef = EXIF.getTag(this, "GPSLatitudeRef");
                 const lonRef = EXIF.getTag(this, "GPSLongitudeRef");
 
-                if (lat && lon && latRef && lonRef) {
-                    // Convert the rational arrays to decimal numbers
-                    const latDegrees = lat[0].numerator / lat[0].denominator;
-                    const latMinutes = lat[1].numerator / lat[1].denominator;
-                    const latSeconds = lat[2].numerator / lat[2].denominator;
-
-                    const lonDegrees = lon[0].numerator / lon[0].denominator;
-                    const lonMinutes = lon[1].numerator / lon[1].denominator;
-                    const lonSeconds = lon[2].numerator / lon[2].denominator;
+                if (lat && lon && latRef && lonRef && lat.length === 3 && lon.length === 3) {
                     
+                    // Helper to safely parse a component which might be a number or a rational object
+                    const parseComponent = (c) => {
+                        if (typeof c === 'number') return c;
+                        if (typeof c === 'object' && c.numerator !== undefined && c.denominator !== undefined) {
+                            if (c.denominator === 0) return 0; // Avoid division by zero
+                            return c.numerator / c.denominator;
+                        }
+                        return NaN; // Return NaN if format is unexpected
+                    };
+
+                    const latDegrees = parseComponent(lat[0]);
+                    const latMinutes = parseComponent(lat[1]);
+                    const latSeconds = parseComponent(lat[2]);
+
+                    const lonDegrees = parseComponent(lon[0]);
+                    const lonMinutes = parseComponent(lon[1]);
+                    const lonSeconds = parseComponent(lon[2]);
+                    
+                    // If any component failed to parse, fallback to map picker
+                    if ([latDegrees, latMinutes, latSeconds, lonDegrees, lonMinutes, lonSeconds].some(isNaN)) {
+                        console.error("EXIF GPSデータの解析に失敗しました。", {lat, lon});
+                        openLocationPickerModal();
+                        return;
+                    }
+
                     const latDD = convertDMSToDD(latDegrees, latMinutes, latSeconds, latRef);
                     const lonDD = convertDMSToDD(lonDegrees, lonMinutes, lonSeconds, lonRef);
 
@@ -534,4 +551,5 @@
     </script>
 </body>
 </html>
+
 
