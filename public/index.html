@@ -457,7 +457,7 @@
         });
         document.getElementById('show-all-btn').addEventListener('click', fetchPosts);
 
-        // --- Image Processing and EXIF Reader ---
+        // --- Image Processing and EXIF Reader (REVISED) ---
         document.getElementById('post-image-file').addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -469,9 +469,10 @@
             document.getElementById('post-lng').value = '';
 
             const reader = new FileReader();
-            reader.onload = (event) => { /* ... (image compression logic is the same) ... */
+            reader.onload = (event) => {
                 const img = new Image();
-                img.onload = () => {
+                img.onload = function() { // Use function() to have `this` refer to the img element
+                    // 1. Process image for preview and compression
                     const canvas = document.createElement('canvas');
                     const MAX_WIDTH = 800;
                     const scaleSize = MAX_WIDTH / img.width;
@@ -482,74 +483,53 @@
                     const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
                     document.getElementById('image-preview').src = dataUrl;
                     document.getElementById('image-preview').classList.remove('hidden');
+                    
+                    // 2. Get EXIF data from the fully loaded image object
+                    EXIF.getData(this, function() {
+                        const lat = EXIF.getTag(this, "GPSLatitude");
+                        const lon = EXIF.getTag(this, "GPSLongitude");
+                        const latRef = EXIF.getTag(this, "GPSLatitudeRef");
+                        const lonRef = EXIF.getTag(this, "GPSLongitudeRef");
+
+                        if (lat && lon && latRef && lonRef && Array.isArray(lat) && lat.length === 3 && Array.isArray(lon) && lon.length === 3) {
+                            const parseComponent = (c) => {
+                                if (typeof c === 'number') return c;
+                                if (typeof c === 'object' && c.numerator !== undefined && c.denominator !== undefined) {
+                                    return c.denominator === 0 ? 0 : c.numerator / c.denominator;
+                                }
+                                return NaN;
+                            };
+
+                            const latDegrees = parseComponent(lat[0]);
+                            const latMinutes = parseComponent(lat[1]);
+                            const latSeconds = parseComponent(lat[2]);
+                            const lonDegrees = parseComponent(lon[0]);
+                            const lonMinutes = parseComponent(lon[1]);
+                            const lonSeconds = parseComponent(lon[2]);
+                            
+                            if ([latDegrees, latMinutes, latSeconds, lonDegrees, lonMinutes, lonSeconds].some(isNaN)) {
+                                console.error("EXIF GPSデータの解析に失敗しました。", {lat, lon});
+                                openLocationPickerModal();
+                                return;
+                            }
+
+                            const latDD = convertDMSToDD(latDegrees, latMinutes, latSeconds, latRef);
+                            const lonDD = convertDMSToDD(lonDegrees, lonMinutes, lonSeconds, lonRef);
+
+                            document.getElementById('post-lat').value = latDD.toFixed(6);
+                            document.getElementById('post-lng').value = lonDD.toFixed(6);
+                            locationStatus.textContent = '✅ 写真のメタデータから位置情報を取得しました。';
+                        } else {
+                            // EXIF data was not found or in an unexpected format
+                            openLocationPickerModal();
+                        }
+                    });
                 };
                 img.src = event.target.result;
             };
             reader.readAsDataURL(file);
-
-            EXIF.getData(file, function() {
-                const lat = EXIF.getTag(this, "GPSLatitude");
-                const lon = EXIF.getTag(this, "GPSLongitude");
-                const latRef = EXIF.getTag(this, "GPSLatitudeRef");
-                const lonRef = EXIF.getTag(this, "GPSLongitudeRef");
-
-                if (lat && lon && latRef && lonRef && lat.length === 3 && lon.length === 3) {
-                    
-                    // Helper to safely parse a component which might be a number or a rational object
-                    const parseComponent = (c) => {
-                        if (typeof c === 'number') return c;
-                        if (typeof c === 'object' && c.numerator !== undefined && c.denominator !== undefined) {
-                            if (c.denominator === 0) return 0; // Avoid division by zero
-                            return c.numerator / c.denominator;
-                        }
-                        return NaN; // Return NaN if format is unexpected
-                    };
-
-                    const latDegrees = parseComponent(lat[0]);
-                    const latMinutes = parseComponent(lat[1]);
-                    const latSeconds = parseComponent(lat[2]);
-
-                    const lonDegrees = parseComponent(lon[0]);
-                    const lonMinutes = parseComponent(lon[1]);
-                    const lonSeconds = parseComponent(lon[2]);
-                    
-                    // If any component failed to parse, fallback to map picker
-                    if ([latDegrees, latMinutes, latSeconds, lonDegrees, lonMinutes, lonSeconds].some(isNaN)) {
-                        console.error("EXIF GPSデータの解析に失敗しました。", {lat, lon});
-                        openLocationPickerModal();
-                        return;
-                    }
-
-                    const latDD = convertDMSToDD(latDegrees, latMinutes, latSeconds, latRef);
-                    const lonDD = convertDMSToDD(lonDegrees, lonMinutes, lonSeconds, lonRef);
-
-                    document.getElementById('post-lat').value = latDD.toFixed(6);
-                    document.getElementById('post-lng').value = lonDD.toFixed(6);
-                    locationStatus.textContent = '✅ 写真のメタデータから位置情報を取得しました。';
-                } else {
-                    openLocationPickerModal();
-                }
-            });
         });
         
         // --- Location Picker Modal Logic ---
-        document.getElementById('confirm-location-btn').addEventListener('click', () => { /* ... (same as before) ... */
-             if (pickerMarker) {
-                 const { lat, lng } = pickerMarker.getLatLng();
-                 document.getElementById('post-lat').value = lat.toFixed(6);
-                 document.getElementById('post-lng').value = lng.toFixed(6);
-                 document.getElementById('location-status').textContent = '✅ マップから場所を選択しました。';
-                 closeModal('location-picker-modal');
-             } else {
-                 alert('地図上をクリックして場所を選択してください。');
-             }
-        });
-        document.getElementById('cancel-location-btn').addEventListener('click', () => { /* ... (same as before) ... */
-            closeModal('location-picker-modal');
-        });
-
-    </script>
-</body>
-</html>
-
+        document.getElementById('confirm-location-btn').addEventListener('click', () => { /*
 
