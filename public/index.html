@@ -7,9 +7,11 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <!-- EXIF情報を読み取るためのライブラリを追加 -->
+    <script src="https://cdn.jsdelivr.net/npm/exif-js"></script>
     <style>
         html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; font-family: 'Inter', sans-serif; }
-        #map { height: 100%; width: 100%; z-index: 10; }
+        #map, #picker-map { height: 100%; width: 100%; z-index: 10; }
         .leaflet-popup-content-wrapper { border-radius: 8px; }
         .modal-overlay { z-index: 40; }
         .modal-content { z-index: 50; }
@@ -53,7 +55,8 @@
     </footer>
 
     <!-- Modals -->
-    <!-- Login Modal -->
+    <!-- (Login, Register, New Post, Post Detail Modals are the same as before) -->
+        <!-- Login Modal -->
     <div id="login-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center modal-overlay">
         <div class="modal-content bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-md">
             <h2 class="text-2xl font-bold mb-6 text-center">ログイン</h2>
@@ -84,16 +87,16 @@
         <div class="modal-content bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-lg">
             <h2 class="text-2xl font-bold mb-6 text-center">新規投稿を作成</h2>
             <form id="new-post-form">
-                <div class="mb-4">
+                 <div class="mb-4">
                     <label class="block mb-2 text-sm font-medium">写真</label>
                     <input type="file" id="post-image-file" accept="image/*" class="w-full bg-gray-700 text-white p-3 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" required>
                     <img id="image-preview" src="" class="hidden mt-4 max-h-40 rounded-lg"/>
+                    <p id="location-status" class="text-sm text-yellow-400 mt-2"></p>
                 </div>
                 <textarea id="post-text" placeholder="旅行の思い出を書きましょう..." rows="4" class="w-full bg-gray-700 text-white p-3 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500" required></textarea>
                 <input type="text" id="post-lat" placeholder="緯度" class="w-full bg-gray-700 text-white p-3 rounded-lg mb-4" required readonly>
                 <input type="text" id="post-lng" placeholder="経度" class="w-full bg-gray-700 text-white p-3 rounded-lg mb-4" required readonly>
-                <button type="button" id="get-location-btn" class="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-3 px-4 rounded-lg transition duration-300 mb-4">現在地を取得</button>
-                <p class="text-sm text-center text-gray-400 mb-4">または、地図上をクリックして場所を選択してください。</p>
+                <p class="text-sm text-center text-gray-400 mb-4">写真に位置情報がない場合は、マップから場所を選択してください。</p>
                 <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-lg transition duration-300">投稿する</button>
             </form>
             <button class="modal-close absolute top-4 right-4 text-gray-400 hover:text-white">&times;</button>
@@ -106,28 +109,39 @@
             <!-- Content will be injected by JavaScript -->
         </div>
     </div>
-
+    
+    <!-- NEW: Location Picker Modal -->
+    <div id="location-picker-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center modal-overlay">
+        <div class="modal-content bg-gray-800 p-6 rounded-lg shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col">
+            <h2 class="text-xl font-bold mb-4 text-center">マップ上で投稿場所を選択してください</h2>
+            <p class="text-center text-gray-400 mb-4">地図上をクリックするとマーカーが置かれます。</p>
+            <div id="picker-map" class="flex-grow w-full rounded-lg border border-gray-600"></div>
+            <div class="mt-4 flex justify-end space-x-4">
+                <button id="cancel-location-btn" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-6 rounded-lg transition duration-300">キャンセル</button>
+                <button id="confirm-location-btn" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-6 rounded-lg transition duration-300">この場所に決定</button>
+            </div>
+        </div>
+    </div>
 
     <script>
-        const map = L.map('map').setView([35.6895, 139.6917], 5); // Initial view on Tokyo
+        // --- Global Variables ---
+        const map = L.map('map').setView([35.6895, 139.6917], 5);
+        let pickerMap;
+        let pickerMarker;
+        let allPosts = [];
+        let markers = [];
+
+        // --- Map Initialization ---
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
         }).addTo(map);
 
-        let allPosts = [];
-        let markers = [];
-
         // --- Helper Functions ---
         const openModal = (id) => document.getElementById(id).classList.remove('hidden');
         const closeModal = (id) => document.getElementById(id).classList.add('hidden');
-
-        /**
-         * JWTトークンを安全に解析する
-         * @param {string} token - JWTトークン
-         * @returns {object|null} - 解析されたペイロード、または失敗した場合はnull
-         */
-        function parseJwt(token) {
-            try {
+        
+        function parseJwt(token) { /* ... (same as before) ... */
+             try {
                 const base64Url = token.split('.')[1];
                 const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
                 const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
@@ -139,19 +153,15 @@
                 return null;
             }
         }
-
-        /** ログアウト状態のUIに更新する */
-        function updateUIForLogout() {
-            document.getElementById('user-info').innerHTML = '';
+        function updateUIForLogout() { /* ... (same as before) ... */
+             document.getElementById('user-info').innerHTML = '';
             document.getElementById('login-btn').classList.remove('hidden');
             document.getElementById('register-btn').classList.remove('hidden');
             document.getElementById('new-post-btn').classList.add('hidden');
             document.getElementById('logout-btn').classList.add('hidden');
             document.getElementById('user-info').classList.add('hidden');
         }
-        
-        /** ログイン状態に応じてUIを更新する */
-        function updateUIForLogin() {
+        function updateUIForLogin() { /* ... (same as before) ... */ 
             const token = localStorage.getItem('token');
             if (token) {
                 const payload = parseJwt(token);
@@ -167,18 +177,14 @@
                     document.getElementById('logout-btn').classList.remove('hidden');
                     document.getElementById('user-info').classList.remove('hidden');
                 } else {
-                    // Invalid token found
                     localStorage.removeItem('token');
                     updateUIForLogout();
                 }
             } else {
-                // Logged out
                 updateUIForLogout();
             }
         }
-
-        // --- API Functions ---
-        async function fetchPosts() {
+        async function fetchPosts() { /* ... (same as before) ... */
             try {
                 const response = await fetch('/api/posts');
                 if (!response.ok) throw new Error('投稿の取得に失敗しました。');
@@ -190,10 +196,8 @@
                 alert(error.message);
             }
         }
-
-        // --- Marker and Timeline Functions ---
-        function updateMarkers(percentage) {
-            markers.forEach(marker => map.removeLayer(marker));
+        function updateMarkers(percentage) { /* ... (same as before) ... */
+             markers.forEach(marker => map.removeLayer(marker));
             markers = [];
 
             const postCount = Math.ceil(allPosts.length * (percentage / 100));
@@ -225,10 +229,8 @@
                 markers.push(marker);
             });
         }
-        
-        // --- Modal Content ---
-        async function showPostDetail(postId) {
-            try {
+        async function showPostDetail(postId) { /* ... (same as before) ... */
+             try {
                 const post = allPosts.find(p => p.id === postId);
                 const commentsResponse = await fetch(`/api/posts/${postId}/comments`);
                 const comments = await commentsResponse.json();
@@ -276,9 +278,8 @@
                 alert('投稿詳細の取得に失敗しました。');
             }
         }
-
-        async function handleCommentSubmit(event) {
-            event.preventDefault();
+        async function handleCommentSubmit(event) { /* ... (same as before) ... */
+             event.preventDefault();
             const token = localStorage.getItem('token');
             if (!token) return alert('コメントするにはログインが必要です。');
 
@@ -298,43 +299,91 @@
                 alert(error.message);
             }
         }
+        
+        // --- DMS to DD Converter for EXIF ---
+        function convertDMSToDD(degrees, minutes, seconds, direction) {
+            let dd = degrees + minutes / 60 + seconds / 3600;
+            if (direction === "S" || direction === "W") {
+                dd = dd * -1;
+            }
+            return dd;
+        }
+
+        // --- Location Picker Functions ---
+        async function openLocationPickerModal() {
+            openModal('location-picker-modal');
+            const locationStatus = document.getElementById('location-status');
+            locationStatus.textContent = 'IPアドレスからおおよその位置を取得中...';
+
+            try {
+                const response = await fetch('https://ipapi.co/json/');
+                if (!response.ok) throw new Error('IP API request failed');
+                const data = await response.json();
+                initializePickerMap(data.latitude, data.longitude);
+                locationStatus.textContent = '写真から位置を取得できませんでした。マップで場所を選択してください。';
+            } catch (error) {
+                console.error("IP-based location failed, defaulting to Tokyo:", error);
+                initializePickerMap(35.6895, 139.6917); // Default to Tokyo on failure
+                locationStatus.textContent = '位置情報の自動取得に失敗しました。マップで場所を選択してください。';
+            }
+        }
+
+        function initializePickerMap(lat, lng) {
+            if (!pickerMap) {
+                pickerMap = L.map('picker-map').setView([lat, lng], 10);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(pickerMap);
+                
+                pickerMap.on('click', function(e) {
+                    if (pickerMarker) {
+                        pickerMap.removeLayer(pickerMarker);
+                    }
+                    pickerMarker = L.marker(e.latlng).addTo(pickerMap);
+                    document.getElementById('confirm-location-btn').disabled = false;
+                });
+            } else {
+                pickerMap.setView([lat, lng], 10);
+            }
+            // Invalidate size to ensure tiles load correctly in modal
+            setTimeout(() => pickerMap.invalidateSize(), 100);
+            document.getElementById('confirm-location-btn').disabled = true;
+            if(pickerMarker) pickerMap.removeLayer(pickerMarker);
+        }
 
         // --- Event Listeners ---
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', () => { /* ... (same as before) ... */ 
             fetchPosts();
             updateUIForLogin();
         });
-
-        document.getElementById('timeline').addEventListener('input', (e) => {
-            updateMarkers(e.target.value);
-        });
-
-        // Modal Open/Close Listeners
+        document.getElementById('timeline').addEventListener('input', (e) => updateMarkers(e.target.value));
         document.getElementById('login-btn').addEventListener('click', () => openModal('login-modal'));
         document.getElementById('register-btn').addEventListener('click', () => openModal('register-modal'));
-        document.getElementById('new-post-btn').addEventListener('click', () => openModal('new-post-modal'));
-        document.getElementById('logout-btn').addEventListener('click', () => {
+        document.getElementById('new-post-btn').addEventListener('click', () => {
+             document.getElementById('new-post-form').reset();
+             document.getElementById('image-preview').classList.add('hidden');
+             document.getElementById('location-status').textContent = '';
+             openModal('new-post-modal');
+        });
+        document.getElementById('logout-btn').addEventListener('click', () => { /* ... (same as before) ... */
             localStorage.removeItem('token');
-            updateUIForLogin(); // UIをログアウト状態に更新
+            updateUIForLogin();
             alert('ログアウトしました。');
         });
-
-        document.querySelectorAll('.modal-overlay').forEach(overlay => {
-            overlay.addEventListener('click', (e) => {
+        document.querySelectorAll('.modal-overlay').forEach(overlay => { /* ... (same as before) ... */
+             overlay.addEventListener('click', (e) => {
                 if (e.target === overlay) {
                     closeModal(overlay.id);
                 }
             });
         });
-        document.querySelectorAll('.modal-close').forEach(btn => {
-            btn.addEventListener('click', () => {
+        document.querySelectorAll('.modal-close').forEach(btn => { /* ... (same as before) ... */
+             btn.addEventListener('click', () => {
                 const modal = btn.closest('.modal-overlay');
                 if(modal) closeModal(modal.id);
             });
         });
 
         // --- Form Submissions ---
-        document.getElementById('register-form').addEventListener('submit', async (e) => {
+        document.getElementById('register-form').addEventListener('submit', async (e) => { /* ... (same as before) ... */
             e.preventDefault();
             const username = document.getElementById('register-username').value;
             const password = document.getElementById('register-password').value;
@@ -352,9 +401,8 @@
                 alert(`登録失敗: ${error.message}`);
             }
         });
-
-        document.getElementById('login-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
+        document.getElementById('login-form').addEventListener('submit', async (e) => { /* ... (same as before) ... */
+             e.preventDefault();
             const username = document.getElementById('login-username').value;
             const password = document.getElementById('login-password').value;
             try {
@@ -373,9 +421,8 @@
                 alert(`ログイン失敗: ${error.message}`);
             }
         });
-
-        document.getElementById('new-post-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
+        document.getElementById('new-post-form').addEventListener('submit', async (e) => { /* ... (same as before) ... */
+             e.preventDefault();
             const token = localStorage.getItem('token');
             if (!token) return alert('投稿するにはログインが必要です。');
 
@@ -384,6 +431,10 @@
             const lat = document.getElementById('post-lat').value;
             const lng = document.getElementById('post-lng').value;
             
+            if (!lat || !lng) {
+                return alert('投稿場所が設定されていません。写真に位置情報がない場合は、マップから場所を選択してください。');
+            }
+
             try {
                 const response = await fetch('/api/posts', {
                     method: 'POST',
@@ -392,39 +443,26 @@
                 });
                 if (!response.ok) throw new Error('投稿に失敗しました。');
                 closeModal('new-post-modal');
-                fetchPosts(); // 投稿後にリストを更新
+                fetchPosts();
             } catch (error) {
                 alert(error.message);
             }
         });
+        document.getElementById('show-all-btn').addEventListener('click', fetchPosts);
 
-        // --- Geolocation and Image Compression ---
-        document.getElementById('get-location-btn').addEventListener('click', () => {
-            if ('geolocation' in navigator) {
-                navigator.geolocation.getCurrentPosition(position => {
-                    const { latitude, longitude } = position.coords;
-                    document.getElementById('post-lat').value = latitude.toFixed(6);
-                    document.getElementById('post-lng').value = longitude.toFixed(6);
-                    map.setView([latitude, longitude], 13);
-                }, error => {
-                    alert(`位置情報の取得に失敗しました: ${error.message}`);
-                    console.error(error);
-                });
-            } else {
-                alert('お使いのブラウザはGeolocation APIをサポートしていません。');
-            }
-        });
-
-        map.on('click', function(e) {
-            if (document.getElementById('new-post-modal').classList.contains('hidden')) return;
-            document.getElementById('post-lat').value = e.latlng.lat.toFixed(6);
-            document.getElementById('post-lng').value = e.latlng.lng.toFixed(6);
-        });
-
+        // --- NEW: Image Processing and EXIF Reader ---
         document.getElementById('post-image-file').addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
 
+            const locationStatus = document.getElementById('location-status');
+            locationStatus.textContent = '写真情報を読み込んでいます...';
+
+            // Reset location fields
+            document.getElementById('post-lat').value = '';
+            document.getElementById('post-lng').value = '';
+
+            // Process image for preview and compression
             const reader = new FileReader();
             reader.onload = (event) => {
                 const img = new Image();
@@ -434,10 +472,8 @@
                     const scaleSize = MAX_WIDTH / img.width;
                     canvas.width = MAX_WIDTH;
                     canvas.height = img.height * scaleSize;
-
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    
                     const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
                     document.getElementById('image-preview').src = dataUrl;
                     document.getElementById('image-preview').classList.remove('hidden');
@@ -445,9 +481,42 @@
                 img.src = event.target.result;
             };
             reader.readAsDataURL(file);
+
+            // Read EXIF data for location
+            EXIF.getData(file, function() {
+                const lat = EXIF.getTag(this, "GPSLatitude");
+                const lon = EXIF.getTag(this, "GPSLongitude");
+                const latRef = EXIF.getTag(this, "GPSLatitudeRef");
+                const lonRef = EXIF.getTag(this, "GPSLongitudeRef");
+
+                if (lat && lon && latRef && lonRef) {
+                    const latDD = convertDMSToDD(lat[0], lat[1], lat[2], latRef);
+                    const lonDD = convertDMSToDD(lon[0], lon[1], lon[2], lonRef);
+                    document.getElementById('post-lat').value = latDD.toFixed(6);
+                    document.getElementById('post-lng').value = lonDD.toFixed(6);
+                    locationStatus.textContent = '✅ 写真のメタデータから位置情報を取得しました。';
+                } else {
+                    openLocationPickerModal();
+                }
+            });
+        });
+        
+        // --- NEW: Location Picker Modal Logic ---
+        document.getElementById('confirm-location-btn').addEventListener('click', () => {
+             if (pickerMarker) {
+                 const { lat, lng } = pickerMarker.getLatLng();
+                 document.getElementById('post-lat').value = lat.toFixed(6);
+                 document.getElementById('post-lng').value = lng.toFixed(6);
+                 document.getElementById('location-status').textContent = '✅ マップから場所を選択しました。';
+                 closeModal('location-picker-modal');
+             } else {
+                 alert('地図上をクリックして場所を選択してください。');
+             }
         });
 
-        document.getElementById('show-all-btn').addEventListener('click', fetchPosts);
+        document.getElementById('cancel-location-btn').addEventListener('click', () => {
+            closeModal('location-picker-modal');
+        });
 
     </script>
 </body>
