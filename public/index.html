@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <script src="https://cdn.jsdelivr.net/npm/exif-js"></script>
+    <!-- exif-js is no longer needed -->
     <style>
         html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; font-family: 'Inter', sans-serif; }
         #map, #picker-map { height: 100%; width: 100%; z-index: 10; }
@@ -87,7 +87,7 @@
             <form id="new-post-form">
                  <div class="mb-4">
                     <label class="block mb-2 text-sm font-medium">写真</label>
-                    <input type="file" id="post-image-file" accept="image/*" class="w-full bg-gray-700 text-white p-3 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" required>
+                    <input type="file" id="post-image-file" accept="image/jpeg, image/png" class="w-full bg-gray-700 text-white p-3 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" required>
                     <img id="image-preview" src="" class="hidden mt-4 max-h-40 rounded-lg"/>
                     <p id="location-status" class="text-sm text-yellow-400 mt-2"></p>
                 </div>
@@ -95,7 +95,7 @@
                 <input type="text" id="post-lat" placeholder="緯度" class="w-full bg-gray-700 text-white p-3 rounded-lg mb-4" required readonly>
                 <input type="text" id="post-lng" placeholder="経度" class="w-full bg-gray-700 text-white p-3 rounded-lg mb-4" required readonly>
                 <p class="text-sm text-center text-gray-400 mb-4">写真に位置情報がない場合は、マップから場所を選択してください。</p>
-                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-lg transition duration-300">投稿する</button>
+                <button type="submit" id="submit-post-btn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-lg transition duration-300">投稿する</button>
             </form>
             <button class="modal-close absolute top-4 right-4 text-gray-400 hover:text-white">&times;</button>
         </div>
@@ -138,7 +138,7 @@
         const openModal = (id) => document.getElementById(id).classList.remove('hidden');
         const closeModal = (id) => document.getElementById(id).classList.add('hidden');
         
-        function parseJwt(token) { /* ... (same as before) ... */
+        function parseJwt(token) {
              try {
                 const base64Url = token.split('.')[1];
                 const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
@@ -151,7 +151,7 @@
                 return null;
             }
         }
-        function updateUIForLogout() { /* ... (same as before) ... */
+        function updateUIForLogout() {
              document.getElementById('user-info').innerHTML = '';
             document.getElementById('login-btn').classList.remove('hidden');
             document.getElementById('register-btn').classList.remove('hidden');
@@ -159,12 +159,11 @@
             document.getElementById('logout-btn').classList.add('hidden');
             document.getElementById('user-info').classList.add('hidden');
         }
-        function updateUIForLogin() { /* ... (same as before) ... */ 
+        function updateUIForLogin() { 
             const token = localStorage.getItem('token');
             if (token) {
                 const payload = parseJwt(token);
                 if (payload) {
-                    // Logged in
                     document.getElementById('user-info').innerHTML = `
                         <img src="${payload.avatar_url}" alt="${payload.username}" class="w-8 h-8 rounded-full mr-2">
                         <span>${payload.username}</span>
@@ -182,7 +181,7 @@
                 updateUIForLogout();
             }
         }
-        async function fetchPosts() { /* ... (same as before) ... */
+        async function fetchPosts() {
             try {
                 const response = await fetch('/api/posts');
                 if (!response.ok) throw new Error('投稿の取得に失敗しました。');
@@ -234,7 +233,7 @@
                 markers.push(marker);
             });
         }
-        async function showPostDetail(postId) { /* ... (same as before) ... */
+        async function showPostDetail(postId) {
              try {
                 const post = allPosts.find(p => p.id === postId);
                 const commentsResponse = await fetch(`/api/posts/${postId}/comments`);
@@ -283,7 +282,7 @@
                 alert('投稿詳細の取得に失敗しました。');
             }
         }
-        async function handleCommentSubmit(event) { /* ... (same as before) ... */
+        async function handleCommentSubmit(event) {
              event.preventDefault();
             const token = localStorage.getItem('token');
             if (!token) return alert('コメントするにはログインが必要です。');
@@ -305,17 +304,8 @@
             }
         }
         
-        // --- DMS to DD Converter for EXIF ---
-        function convertDMSToDD(degrees, minutes, seconds, direction) {
-            let dd = degrees + minutes / 60 + seconds / 3600;
-            if (direction === "S" || direction === "W") {
-                dd = dd * -1;
-            }
-            return dd;
-        }
-
         // --- Location Picker Functions ---
-        async function openLocationPickerModal() { /* ... (same as before) ... */
+        async function openLocationPickerModal() {
              openModal('location-picker-modal');
             const locationStatus = document.getElementById('location-status');
             locationStatus.textContent = 'IPアドレスからおおよその位置を取得中...';
@@ -332,7 +322,7 @@
                 locationStatus.textContent = '位置情報の自動取得に失敗しました。マップで場所を選択してください。';
             }
         }
-        function initializePickerMap(lat, lng) { /* ... (same as before) ... */
+        function initializePickerMap(lat, lng) {
              if (!pickerMap) {
                 pickerMap = L.map('picker-map').setView([lat, lng], 10);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(pickerMap);
@@ -354,7 +344,7 @@
         }
 
         // --- Event Listeners ---
-        document.addEventListener('DOMContentLoaded', () => { /* ... (same as before) ... */ 
+        document.addEventListener('DOMContentLoaded', () => { 
             fetchPosts();
             updateUIForLogin();
         });
@@ -367,19 +357,19 @@
              document.getElementById('location-status').textContent = '';
              openModal('new-post-modal');
         });
-        document.getElementById('logout-btn').addEventListener('click', () => { /* ... (same as before) ... */
+        document.getElementById('logout-btn').addEventListener('click', () => {
             localStorage.removeItem('token');
             updateUIForLogin();
             alert('ログアウトしました。');
         });
-        document.querySelectorAll('.modal-overlay').forEach(overlay => { /* ... (same as before) ... */
+        document.querySelectorAll('.modal-overlay').forEach(overlay => {
              overlay.addEventListener('click', (e) => {
                 if (e.target === overlay) {
                     closeModal(overlay.id);
                 }
             });
         });
-        document.querySelectorAll('.modal-close').forEach(btn => { /* ... (same as before) ... */
+        document.querySelectorAll('.modal-close').forEach(btn => {
              btn.addEventListener('click', () => {
                 const modal = btn.closest('.modal-overlay');
                 if(modal) closeModal(modal.id);
@@ -387,7 +377,7 @@
         });
 
         // --- Form Submissions ---
-        document.getElementById('register-form').addEventListener('submit', async (e) => { /* ... (same as before) ... */
+        document.getElementById('register-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const username = document.getElementById('register-username').value;
             const password = document.getElementById('register-password').value;
@@ -405,7 +395,7 @@
                 alert(`登録失敗: ${error.message}`);
             }
         });
-        document.getElementById('login-form').addEventListener('submit', async (e) => { /* ... (same as before) ... */
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
              e.preventDefault();
             const username = document.getElementById('login-username').value;
             const password = document.getElementById('login-password').value;
@@ -425,7 +415,8 @@
                 alert(`ログイン失敗: ${error.message}`);
             }
         });
-        document.getElementById('new-post-form').addEventListener('submit', async (e) => { /* ... (same as before) ... */
+
+        document.getElementById('new-post-form').addEventListener('submit', async (e) => {
              e.preventDefault();
             const token = localStorage.getItem('token');
             if (!token) return alert('投稿するにはログインが必要です。');
@@ -435,6 +426,7 @@
             const lat = document.getElementById('post-lat').value;
             const lng = document.getElementById('post-lng').value;
             
+            if (!image_url) return alert('写真がありません。');
             if (!lat || !lng) {
                 return alert('投稿場所が設定されていません。写真に位置情報がない場合は、マップから場所を選択してください。');
             }
@@ -445,7 +437,10 @@
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                     body: JSON.stringify({ image_url, text, lat, lng })
                 });
-                if (!response.ok) throw new Error('投稿に失敗しました。');
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || '投稿に失敗しました。');
+                }
                 closeModal('new-post-modal');
                 fetchPosts();
             } catch (error) {
@@ -454,93 +449,57 @@
         });
         document.getElementById('show-all-btn').addEventListener('click', fetchPosts);
 
-        // --- Image Processing and EXIF Reader (FIXED) ---
-        document.getElementById('post-image-file').addEventListener('change', (e) => {
+        // --- Image Upload and Server-side EXIF Parsing ---
+        document.getElementById('post-image-file').addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
 
             const locationStatus = document.getElementById('location-status');
-            locationStatus.textContent = '写真情報を読み込んでいます...';
-
+            const submitButton = document.getElementById('submit-post-btn');
+            
+            locationStatus.textContent = '写真をアップロードして解析中...';
+            submitButton.disabled = true;
             document.getElementById('post-lat').value = '';
             document.getElementById('post-lng').value = '';
+            
+            const formData = new FormData();
+            formData.append('photo', file);
 
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 800;
-                    const scaleSize = MAX_WIDTH / img.width;
-                    canvas.width = MAX_WIDTH;
-                    canvas.height = img.height * scaleSize;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-                    document.getElementById('image-preview').src = dataUrl;
-                    document.getElementById('image-preview').classList.remove('hidden');
-                };
-                img.src = event.target.result;
-            };
-            reader.readAsDataURL(file);
+            try {
+                const response = await fetch('/api/upload-and-parse', {
+                    method: 'POST',
+                    body: formData
+                });
 
-            EXIF.getData(file, function() {
-                try {
-                    const lat = EXIF.getTag(this, "GPSLatitude");
-                    const lon = EXIF.getTag(this, "GPSLongitude");
-                    const latRef = EXIF.getTag(this, "GPSLatitudeRef");
-                    const lonRef = EXIF.getTag(this, "GPSLongitudeRef");
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || '画像のアップロードに失敗しました。');
+                }
 
-                    if (!lat || !lon || !latRef || !lonRef || !Array.isArray(lat) || lat.length !== 3 || !Array.isArray(lon) || lon.length !== 3) {
-                        console.log("GPS情報が見つからないか、形式が不正です。マップピッカーを開きます。");
-                        openLocationPickerModal();
-                        return;
-                    }
-                    
-                    const parseComponent = (c) => {
-                        if (typeof c === 'number') return c;
-                        if (c && typeof c === 'object' && c.numerator !== undefined && c.denominator !== undefined) {
-                            return c.denominator === 0 ? 0 : c.numerator / c.denominator;
-                        }
-                        return NaN;
-                    };
+                const result = await response.json();
+                
+                document.getElementById('image-preview').src = result.image_url;
+                document.getElementById('image-preview').classList.remove('hidden');
 
-                    const latDegrees = parseComponent(lat[0]);
-                    const latMinutes = parseComponent(lat[1]);
-                    const latSeconds = parseComponent(lat[2]);
-
-                    const lonDegrees = parseComponent(lon[0]);
-                    const lonMinutes = parseComponent(lon[1]);
-                    const lonSeconds = parseComponent(lon[2]);
-                    
-                    if ([latDegrees, latMinutes, latSeconds, lonDegrees, lonMinutes, lonSeconds].some(isNaN)) {
-                        console.error("EXIF GPSデータのコンポーネント解析に失敗しました。", {lat, lon});
-                        openLocationPickerModal();
-                        return;
-                    }
-
-                    const latDD = convertDMSToDD(latDegrees, latMinutes, latSeconds, latRef);
-                    const lonDD = convertDMSToDD(lonDegrees, lonMinutes, lonSeconds, lonRef);
-
-                    if (isNaN(latDD) || isNaN(lonDD)) {
-                        console.error("DMSからDDへの変換に失敗しました。");
-                        openLocationPickerModal();
-                        return;
-                    }
-
-                    document.getElementById('post-lat').value = latDD.toFixed(6);
-                    document.getElementById('post-lng').value = lonDD.toFixed(6);
+                if (result.hasCoordinates && result.coordinates) {
+                    document.getElementById('post-lat').value = result.coordinates.lat.toFixed(6);
+                    document.getElementById('post-lng').value = result.coordinates.lng.toFixed(6);
                     locationStatus.textContent = '✅ 写真のメタデータから位置情報を取得しました。';
-
-                } catch (error) {
-                    console.error("EXIFデータの処理中に予期せぬエラーが発生しました:", error);
+                } else {
                     openLocationPickerModal();
                 }
-            });
+
+            } catch (error) {
+                console.error("Image processing error:", error);
+                locationStatus.textContent = `エラー: ${error.message}`;
+                alert(`エラー: ${error.message}`);
+            } finally {
+                submitButton.disabled = false;
+            }
         });
         
         // --- Location Picker Modal Logic ---
-        document.getElementById('confirm-location-btn').addEventListener('click', () => { /* ... (same as before) ... */
+        document.getElementById('confirm-location-btn').addEventListener('click', () => {
              if (pickerMarker) {
                  const { lat, lng } = pickerMarker.getLatLng();
                  document.getElementById('post-lat').value = lat.toFixed(6);
@@ -551,7 +510,7 @@
                  alert('地図上をクリックして場所を選択してください。');
              }
         });
-        document.getElementById('cancel-location-btn').addEventListener('click', () => { /* ... (same as before) ... */
+        document.getElementById('cancel-location-btn').addEventListener('click', () => {
             closeModal('location-picker-modal');
         });
 
