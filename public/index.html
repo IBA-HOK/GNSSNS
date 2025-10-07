@@ -7,7 +7,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <!-- EXIF情報を読み取るためのライブラリを追加 -->
     <script src="https://cdn.jsdelivr.net/npm/exif-js"></script>
     <style>
         html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; font-family: 'Inter', sans-serif; }
@@ -55,8 +54,7 @@
     </footer>
 
     <!-- Modals -->
-    <!-- (Login, Register, New Post, Post Detail Modals are the same as before) -->
-        <!-- Login Modal -->
+    <!-- Login Modal -->
     <div id="login-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center modal-overlay">
         <div class="modal-content bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-md">
             <h2 class="text-2xl font-bold mb-6 text-center">ログイン</h2>
@@ -110,7 +108,7 @@
         </div>
     </div>
     
-    <!-- NEW: Location Picker Modal -->
+    <!-- Location Picker Modal -->
     <div id="location-picker-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center modal-overlay">
         <div class="modal-content bg-gray-800 p-6 rounded-lg shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col">
             <h2 class="text-xl font-bold mb-4 text-center">マップ上で投稿場所を選択してください</h2>
@@ -310,8 +308,8 @@
         }
 
         // --- Location Picker Functions ---
-        async function openLocationPickerModal() {
-            openModal('location-picker-modal');
+        async function openLocationPickerModal() { /* ... (same as before) ... */
+             openModal('location-picker-modal');
             const locationStatus = document.getElementById('location-status');
             locationStatus.textContent = 'IPアドレスからおおよその位置を取得中...';
 
@@ -327,9 +325,8 @@
                 locationStatus.textContent = '位置情報の自動取得に失敗しました。マップで場所を選択してください。';
             }
         }
-
-        function initializePickerMap(lat, lng) {
-            if (!pickerMap) {
+        function initializePickerMap(lat, lng) { /* ... (same as before) ... */
+             if (!pickerMap) {
                 pickerMap = L.map('picker-map').setView([lat, lng], 10);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(pickerMap);
                 
@@ -450,7 +447,7 @@
         });
         document.getElementById('show-all-btn').addEventListener('click', fetchPosts);
 
-        // --- NEW: Image Processing and EXIF Reader ---
+        // --- Image Processing and EXIF Reader (FIXED) ---
         document.getElementById('post-image-file').addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -458,13 +455,11 @@
             const locationStatus = document.getElementById('location-status');
             locationStatus.textContent = '写真情報を読み込んでいます...';
 
-            // Reset location fields
             document.getElementById('post-lat').value = '';
             document.getElementById('post-lng').value = '';
 
-            // Process image for preview and compression
             const reader = new FileReader();
-            reader.onload = (event) => {
+            reader.onload = (event) => { /* ... (image compression logic is the same) ... */
                 const img = new Image();
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
@@ -482,7 +477,6 @@
             };
             reader.readAsDataURL(file);
 
-            // Read EXIF data for location
             EXIF.getData(file, function() {
                 const lat = EXIF.getTag(this, "GPSLatitude");
                 const lon = EXIF.getTag(this, "GPSLongitude");
@@ -490,8 +484,20 @@
                 const lonRef = EXIF.getTag(this, "GPSLongitudeRef");
 
                 if (lat && lon && latRef && lonRef) {
-                    const latDD = convertDMSToDD(lat[0], lat[1], lat[2], latRef);
-                    const lonDD = convertDMSToDD(lon[0], lon[1], lon[2], lonRef);
+                    // ** FIX START **
+                    // Convert the rational arrays to decimal numbers
+                    const latDegrees = lat[0].numerator / lat[0].denominator;
+                    const latMinutes = lat[1].numerator / lat[1].denominator;
+                    const latSeconds = lat[2].numerator / lat[2].denominator;
+
+                    const lonDegrees = lon[0].numerator / lon[0].denominator;
+                    const lonMinutes = lon[1].numerator / lon[1].denominator;
+                    const lonSeconds = lon[2].numerator / lon[2].denominator;
+                    
+                    const latDD = convertDMSToDD(latDegrees, latMinutes, latSeconds, latRef);
+                    const lonDD = convertDMSToDD(lonDegrees, lonMinutes, lonSeconds, lonRef);
+                    // ** FIX END **
+
                     document.getElementById('post-lat').value = latDD.toFixed(6);
                     document.getElementById('post-lng').value = lonDD.toFixed(6);
                     locationStatus.textContent = '✅ 写真のメタデータから位置情報を取得しました。';
@@ -501,8 +507,8 @@
             });
         });
         
-        // --- NEW: Location Picker Modal Logic ---
-        document.getElementById('confirm-location-btn').addEventListener('click', () => {
+        // --- Location Picker Modal Logic ---
+        document.getElementById('confirm-location-btn').addEventListener('click', () => { /* ... (same as before) ... */
              if (pickerMarker) {
                  const { lat, lng } = pickerMarker.getLatLng();
                  document.getElementById('post-lat').value = lat.toFixed(6);
@@ -513,8 +519,7 @@
                  alert('地図上をクリックして場所を選択してください。');
              }
         });
-
-        document.getElementById('cancel-location-btn').addEventListener('click', () => {
+        document.getElementById('cancel-location-btn').addEventListener('click', () => { /* ... (same as before) ... */
             closeModal('location-picker-modal');
         });
 
