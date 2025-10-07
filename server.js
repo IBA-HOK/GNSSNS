@@ -3,7 +3,7 @@ const db = require('./database');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
-const exifParser = require('exif-parser');
+const exifr = require('exifr'); // exif-parserからexifrに変更
 const sharp = require('sharp');
 
 const app = express();
@@ -11,13 +11,11 @@ const port = 3000;
 const SECRET_KEY = 'your_very_secret_key_that_is_long_and_secure';
 
 app.use(express.static('public'));
-app.use(express.json({ limit: '10mb' })); // Increase limit for base64 images
+app.use(express.json({ limit: '10mb' }));
 
-// Multer setup for file uploads in memory
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
-// Middleware to authenticate JWT
 function authenticateToken(req, res, next) {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -74,43 +72,34 @@ app.post('/api/login', (req, res) => {
     });
 });
 
-// Image Upload, Compression, and EXIF Parsing
+// Image Upload, Compression, and EXIF Parsing (FIXED)
 app.post('/api/upload-and-parse', upload.single('photo'), async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: '画像ファイルが見つかりません。' });
     }
 
     try {
-        // Compress image
+        // Compress image using sharp
         const compressedImageBuffer = await sharp(req.file.buffer)
             .resize(800)
             .jpeg({ quality: 80 })
             .toBuffer();
         const base64Image = `data:image/jpeg;base64,${compressedImageBuffer.toString('base64')}`;
 
-        // Parse EXIF data
-        const parser = exifParser.create(req.file.buffer);
-        const result = parser.parse();
-        
+        // Parse GPS data using exifr
         let coordinates = null;
-        if (result && result.tags && result.tags.GPSLatitude && result.tags.GPSLongitude) {
-             const lat = result.tags.GPSLatitude;
-             const lon = result.tags.GPSLongitude;
-             const latRef = result.tags.GPSLatitudeRef || 'N';
-             const lonRef = result.tags.GPSLongitudeRef || 'E';
-             
-             const convertDMSToDD = (dms, ref) => {
-                let dd = dms[0] + dms[1] / 60 + dms[2] / 3600;
-                if (ref === 'S' || ref === 'W') {
-                    dd = dd * -1;
-                }
-                return dd;
-             };
-             
-             coordinates = {
-                lat: convertDMSToDD(lat, latRef),
-                lng: convertDMSToDD(lon, lonRef),
-             };
+        try {
+            const gpsData = await exifr.gps(req.file.buffer);
+            if (gpsData && gpsData.latitude && gpsData.longitude) {
+                coordinates = {
+                    lat: gpsData.latitude,
+                    lng: gpsData.longitude,
+                };
+            }
+        } catch (error) {
+            console.log("exifrライブラリでのGPS解析に失敗しました:", error.message);
+            // エラーが発生しても処理を続行し、座標なしとして扱う
+            coordinates = null;
         }
         
         res.json({
@@ -195,4 +184,3 @@ app.post('/api/posts/:id/comments', authenticateToken, (req, res) => {
 app.listen(port, () => {
     console.log(`Server running on http://localhost:${port}`);
 });
-
