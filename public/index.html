@@ -194,7 +194,9 @@
                 alert(error.message);
             }
         }
-        function updateMarkers(percentage) { /* ... (same as before) ... */
+
+        // --- Marker and Timeline Functions (FIXED) ---
+        function updateMarkers(percentage) {
              markers.forEach(marker => map.removeLayer(marker));
             markers = [];
 
@@ -209,6 +211,14 @@
             }
 
             postsToShow.forEach((post, index) => {
+                // ** FIX START **
+                // Check for valid coordinates before creating a marker
+                if (post.lat == null || post.lng == null || isNaN(post.lat) || isNaN(post.lng)) {
+                    console.error('無効な座標の投稿データです。この投稿はスキップされます:', post);
+                    return; // Skip this post
+                }
+                // ** FIX END **
+
                 const isLatest = index === postsToShow.length - 1;
                 const iconHtml = `<div class="relative w-10 h-10">
                     <img src="${post.image_url}" class="w-10 h-10 rounded-full border-2 border-white object-cover shadow-lg">
@@ -447,7 +457,7 @@
         });
         document.getElementById('show-all-btn').addEventListener('click', fetchPosts);
 
-        // --- Image Processing and EXIF Reader (FIXED) ---
+        // --- Image Processing and EXIF Reader ---
         document.getElementById('post-image-file').addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -484,7 +494,6 @@
                 const lonRef = EXIF.getTag(this, "GPSLongitudeRef");
 
                 if (lat && lon && latRef && lonRef) {
-                    // ** FIX START **
                     // Convert the rational arrays to decimal numbers
                     const latDegrees = lat[0].numerator / lat[0].denominator;
                     const latMinutes = lat[1].numerator / lat[1].denominator;
@@ -496,7 +505,6 @@
                     
                     const latDD = convertDMSToDD(latDegrees, latMinutes, latSeconds, latRef);
                     const lonDD = convertDMSToDD(lonDegrees, lonMinutes, lonSeconds, lonRef);
-                    // ** FIX END **
 
                     document.getElementById('post-lat').value = latDD.toFixed(6);
                     document.getElementById('post-lng').value = lonDD.toFixed(6);
