@@ -89,16 +89,19 @@ app.post('/api/upload-and-parse', upload.single('photo'), async (req, res) => {
         // Parse GPS data using exifr
         let coordinates = null;
         try {
-            const gpsData = await exifr.gps(req.file.buffer);
-            if (gpsData && gpsData.latitude && gpsData.longitude) {
+            // exifr.parseを使用して、より詳細なEXIFデータを取得します
+            const exifData = await exifr.parse(req.file.buffer);
+            if (exifData && exifData.latitude && exifData.longitude) {
                 coordinates = {
-                    lat: gpsData.latitude,
-                    lng: gpsData.longitude,
+                    lat: exifData.latitude,
+                    lng: exifData.longitude,
                 };
+                console.log('GPS data found:', coordinates); // ログを追加して確認
+            } else {
+                console.log('GPS data not found in EXIF.'); // GPSが見つからなかった場合のログ
             }
         } catch (error) {
             console.log("exifrライブラリでのGPS解析に失敗しました:", error.message);
-            // エラーが発生しても処理を続行し、座標なしとして扱う
             coordinates = null;
         }
         
