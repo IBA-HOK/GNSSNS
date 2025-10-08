@@ -88,8 +88,10 @@
             <h2 class="text-2xl font-bold mb-6 text-center">新規投稿を作成</h2>
             <form id="new-post-form">
             <div class="mb-4">
-                <label class="block mb-2 text-sm font-medium">写真</label>                
-                <input type="file" id="post-image-file" accept="image/*" class="w-full bg-gray-700 text-white p-3 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" required>
+                <label class="block mb-2 text-sm font-medium">写真</label>
+
+                <input type="file" id="post-image-file" class="w-full bg-gray-700 text-white p-3 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" required>
+                
                 <img id="image-preview" src="" class="hidden mt-4 max-h-40 rounded-lg"/>
                 <p id="location-status" class="text-sm text-yellow-400 mt-2"></p>
             </div>
@@ -124,6 +126,74 @@
     </div>
 
     <script>
+
+// --- Universal File Handler with Type Check ---
+async function handleFile(file) {
+    if (!file || !file.type.startsWith('image/')) {
+        alert('画像ファイルを選択してください。');
+        document.getElementById('post-image-file').value = '';
+        return;
+    }
+
+    const locationStatus = document.getElementById('location-status');
+    const submitButton = document.getElementById('submit-post-btn');
+    const imagePreview = document.getElementById('image-preview');
+
+    locationStatus.textContent = '写真を解析中...';
+    submitButton.disabled = true;
+    document.getElementById('post-lat').value = '';
+    document.getElementById('post-lng').value = '';
+
+    // 1. Client-side EXIF Parsing
+    try {
+        const gpsData = await exifr.gps(file);
+        if (gpsData && gpsData.latitude && gpsData.longitude) {
+            document.getElementById('post-lat').value = gpsData.latitude.toFixed(6);
+            document.getElementById('post-lng').value = gpsData.longitude.toFixed(6);
+            locationStatus.textContent = '✅ 写真のメタデータから位置情報を取得しました。';
+        } else {
+            locationStatus.textContent = '写真から位置情報を取得できませんでした。マップで場所を選択してください。';
+            openLocationPickerModal();
+        }
+    } catch (error) {
+        console.error("Client-side EXIF parsing error:", error);
+        locationStatus.textContent = 'EXIF情報の解析に失敗しました。マップで場所を選択してください。';
+        openLocationPickerModal();
+    }
+
+    // 2. Image Compression on Server
+    const formData = new FormData();
+    formData.append('photo', file);
+
+    try {
+        const response = await fetch('/api/upload-and-compress', {
+            method: 'POST',
+            body: formData
+        });
+        if (!response.ok) throw new Error((await response.json()).error || '画像のアップロードに失敗しました。');
+        
+        const result = await response.json();
+        imagePreview.src = result.image_url;
+        imagePreview.classList.remove('hidden');
+        
+        const latValue = document.getElementById('post-lat').value;
+        locationStatus.textContent = latValue
+            ? '✅ 写真の位置情報と圧縮が完了しました。'
+            : '✅ 画像の圧縮が完了しました。場所をマップで確定してください。';
+
+    } catch (error) {
+        console.error("Image processing error:", error);
+        locationStatus.textContent = `エラー: ${error.message}`;
+    } finally {
+        submitButton.disabled = false;
+    }
+}
+
+// --- Event Listener for File Input ---
+document.getElementById('post-image-file').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) handleFile(file);
+});
         // --- Global Variables ---
         const map = L.map('map').setView([35.6895, 139.6917], 5);
         let pickerMap;
