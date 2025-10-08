@@ -25,6 +25,12 @@
             70% { box-shadow: 0 0 0 20px rgba(0, 128, 255, 0); }
             100% { box-shadow: 0 0 0 0 rgba(0, 128, 255, 0); }
         }
+        .pulse-blue { animation: pulse-blue-animation 2s infinite; }
+        @keyframes pulse-blue-animation {
+            0% { box-shadow: 0 0 0 0px rgba(0, 128, 255, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(0, 128, 255, 0); }
+            100% { box-shadow: 0 0 0 0px rgba(0, 128, 255, 0); }
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white flex flex-col h-screen">
@@ -289,9 +295,8 @@ document.getElementById('post-image-file').addEventListener('change', (e) => {
 
                 const isLatest = index === postsToShow.length - 1;
                 const iconHtml = `<div class="relative w-10 h-10">
-                    <img src="${post.image_url}" class="w-10 h-10 rounded-full border-2 border-white object-cover shadow-lg">
-                    ${isLatest ? '<div class="absolute top-0 left-0 w-full h-full rounded-full pulse border-2 border-blue-400"></div>' : ''}
-                </div>`;
+                                    <img src="${post.image_url}" class="w-10 h-10 rounded-full border-2 border-white object-cover shadow-lg ${isLatest ? 'pulse-blue' : ''}">
+                                </div>`;
                 
                 const customIcon = L.divIcon({
                     html: iconHtml,
