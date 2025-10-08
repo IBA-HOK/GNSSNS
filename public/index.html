@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>旅行記SNS</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://cdn.jsdelivr.net/npm/exifr/dist/lite.umd.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <!-- exif-js is no longer needed -->
@@ -449,24 +451,51 @@
         });
         document.getElementById('show-all-btn').addEventListener('click', fetchPosts);
 
-        // --- Image Upload and Server-side EXIF Parsing ---
+        // public/index.html の <script> タグ内の既存のイベントリスナーを置き換え
+
+// --- Image Upload and Client-side EXIF Parsing ---
         document.getElementById('post-image-file').addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
 
             const locationStatus = document.getElementById('location-status');
             const submitButton = document.getElementById('submit-post-btn');
+            const imagePreview = document.getElementById('image-preview');
             
-            locationStatus.textContent = '写真をアップロードして解析中...';
+            // UIを初期化
+            locationStatus.textContent = '写真を解析中...';
             submitButton.disabled = true;
             document.getElementById('post-lat').value = '';
             document.getElementById('post-lng').value = '';
             
+            // --- Client-side EXIF Parsing ---
+            try {
+                const gpsData = await exifr.gps(file);
+                if (gpsData && gpsData.latitude && gpsData.longitude) {
+                    document.getElementById('post-lat').value = gpsData.latitude.toFixed(6);
+                    document.getElementById('post-lng').value = gpsData.longitude.toFixed(6);
+                    locationStatus.textContent = '✅ 写真のメタデータから位置情報を取得しました。';
+                } else {
+                    // EXIFにGPS情報がなかった場合、マップピッカーを開く
+                    locationStatus.textContent = '写真から位置情報を取得できませんでした。マップで場所を選択してください。';
+                    openLocationPickerModal();
+                }
+            } catch (error) {
+                // EXIF解析自体に失敗した場合もマップピッカーを開く
+                console.error("Client-side EXIF parsing error:", error);
+                locationStatus.textContent = 'EXIF情報の解析に失敗しました。マップで場所を選択してください。';
+                openLocationPickerModal();
+            }
+
+            // --- Image Compression on Server ---
+            // 画像の圧縮とプレビュー表示はサーバーに任せる
             const formData = new FormData();
             formData.append('photo', file);
 
             try {
-                const response = await fetch('/api/upload-and-parse', {
+                locationStatus.textContent = '画像をサーバーで圧縮中...';
+                // サーバーには圧縮とBase64化のみを依頼する
+                const response = await fetch('/api/upload-and-compress', {
                     method: 'POST',
                     body: formData
                 });
@@ -478,16 +507,11 @@
 
                 const result = await response.json();
                 
-                document.getElementById('image-preview').src = result.image_url;
-                document.getElementById('image-preview').classList.remove('hidden');
-
-                if (result.hasCoordinates && result.coordinates) {
-                    document.getElementById('post-lat').value = result.coordinates.lat.toFixed(6);
-                    document.getElementById('post-lng').value = result.coordinates.lng.toFixed(6);
-                    locationStatus.textContent = '✅ 写真のメタデータから位置情報を取得しました。';
-                } else {
-                    openLocationPickerModal();
-                }
+                imagePreview.src = result.image_url;
+                imagePreview.classList.remove('hidden');
+                locationStatus.textContent = document.getElementById('post-lat').value 
+                    ? '✅ 写真の位置情報と圧縮が完了しました。'
+                    : '✅ 画像の圧縮が完了しました。場所をマップで確定してください。';
 
             } catch (error) {
                 console.error("Image processing error:", error);
@@ -496,8 +520,7 @@
             } finally {
                 submitButton.disabled = false;
             }
-        });
-        
+        });        
         // --- Location Picker Modal Logic ---
         document.getElementById('confirm-location-btn').addEventListener('click', () => {
              if (pickerMarker) {

@@ -73,7 +73,10 @@ app.post('/api/login', (req, res) => {
 });
 
 // Image Upload, Compression, and EXIF Parsing (FIXED)
-app.post('/api/upload-and-parse', upload.single('photo'), async (req, res) => {
+// server.js の既存の /api/upload-and-parse エンドポイントを置き換え
+
+// Image Upload and Compression (No EXIF Parsing)
+app.post('/api/upload-and-compress', upload.single('photo'), async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: '画像ファイルが見つかりません。' });
     }
@@ -85,39 +88,18 @@ app.post('/api/upload-and-parse', upload.single('photo'), async (req, res) => {
             .jpeg({ quality: 80 })
             .toBuffer();
         const base64Image = `data:image/jpeg;base64,${compressedImageBuffer.toString('base64')}`;
-
-        // Parse GPS data using exifr
-        let coordinates = null;
-        try {
-            // exifr.parseを使用して、より詳細なEXIFデータを取得します
-            const exifData = await exifr.parse(req.file.buffer);
-            if (exifData && exifData.latitude && exifData.longitude) {
-                coordinates = {
-                    lat: exifData.latitude,
-                    lng: exifData.longitude,
-                };
-                console.log('GPS data found:', coordinates); // ログを追加して確認
-            } else {
-                console.log('GPS data not found in EXIF.'); // GPSが見つからなかった場合のログ
-            }
-        } catch (error) {
-            console.log("exifrライブラリでのGPS解析に失敗しました:", error.message);
-            coordinates = null;
-        }
         
+        // 座標情報は不要なので返さない
         res.json({
             success: true,
-            hasCoordinates: !!coordinates,
-            coordinates: coordinates,
             image_url: base64Image
         });
 
     } catch (error) {
-        console.error("画像処理エラー:", error);
+        console.error("画像圧縮エラー:", error);
         res.status(500).json({ error: '画像の処理中にエラーが発生しました。' });
     }
 });
-
 
 // Get all posts
 app.get('/api/posts', (req, res) => {
