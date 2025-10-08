@@ -87,12 +87,12 @@
         <div class="modal-content bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-lg">
             <h2 class="text-2xl font-bold mb-6 text-center">新規投稿を作成</h2>
             <form id="new-post-form">
-                 <div class="mb-4">
-                    <label class="block mb-2 text-sm font-medium">写真</label>
-                    <input type="file" id="post-image-file" accept="image/jpeg, image/png" class="w-full bg-gray-700 text-white p-3 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" required>
-                    <img id="image-preview" src="" class="hidden mt-4 max-h-40 rounded-lg"/>
-                    <p id="location-status" class="text-sm text-yellow-400 mt-2"></p>
-                </div>
+            <div class="mb-4">
+                <label class="block mb-2 text-sm font-medium">写真</label>                
+                <input type="file" id="post-image-file" accept="image/*" class="w-full bg-gray-700 text-white p-3 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" required>
+                <img id="image-preview" src="" class="hidden mt-4 max-h-40 rounded-lg"/>
+                <p id="location-status" class="text-sm text-yellow-400 mt-2"></p>
+            </div>
                 <textarea id="post-text" placeholder="旅行の思い出を書きましょう..." rows="4" class="w-full bg-gray-700 text-white p-3 rounded-lg mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500" required></textarea>
                 <input type="text" id="post-lat" placeholder="緯度" class="w-full bg-gray-700 text-white p-3 rounded-lg mb-4" required readonly>
                 <input type="text" id="post-lng" placeholder="経度" class="w-full bg-gray-700 text-white p-3 rounded-lg mb-4" required readonly>
