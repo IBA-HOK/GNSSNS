@@ -310,11 +310,13 @@ document.getElementById('post-image-file').addEventListener('change', (e) => {
                 markers.push(marker);
             });
         }
-        async function showPostDetail(postId) {
+async function showPostDetail(postId) {
              try {
                 const post = allPosts.find(p => p.id === postId);
                 const commentsResponse = await fetch(`/api/posts/${postId}/comments`);
                 const comments = await commentsResponse.json();
+                const token = localStorage.getItem('token');
+                const currentUser = token ? parseJwt(token) : null;
 
                 let commentsHtml = comments.map(c => `
                     <div class="flex items-start space-x-3 py-3">
@@ -330,11 +332,19 @@ document.getElementById('post-image-file').addEventListener('change', (e) => {
                 contentDiv.innerHTML = `
                     <img src="${post.image_url}" class="w-full h-64 object-cover rounded-t-lg">
                     <div class="p-6 flex-grow overflow-y-auto">
-                        <div class="flex items-center mb-4">
-                            <img src="${post.user_avatar}" class="w-12 h-12 rounded-full mr-4">
-                            <div>
-                                <h3 class="text-xl font-bold">${post.user_name}</h3>
-                                <p class="text-sm text-gray-400">${new Date(post.timestamp).toLocaleString()}</p>
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center">
+                                <img src="${post.user_avatar}" class="w-12 h-12 rounded-full mr-4">
+                                <div>
+                                    <h3 class="text-xl font-bold">${post.user_name}</h3>
+                                    <p class="text-sm text-gray-400">${new Date(post.timestamp).toLocaleString()}</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <a href="https://www.google.com/maps?q=${post.lat},${post.lng}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 transition duration-300">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                </a>
+                                ${currentUser && currentUser.username === post.user_name ? `<button id="delete-post-btn" data-post-id="${post.id}" class="text-red-500 hover:text-red-400 transition duration-300"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>` : ''}
                             </div>
                         </div>
                         <p class="text-gray-200 mb-6">${post.text}</p>
@@ -350,6 +360,10 @@ document.getElementById('post-image-file').addEventListener('change', (e) => {
                     <button class="modal-close absolute top-2 right-2 text-white bg-black bg-opacity-50 rounded-full p-1 leading-none">&times;</button>
                 `;
                 openModal('post-detail-modal');
+
+                if (currentUser && currentUser.username === post.user_name) {
+                    document.getElementById('delete-post-btn').addEventListener('click', handleDeletePost);
+                }
 
                 document.getElementById('comment-form').addEventListener('submit', handleCommentSubmit);
                 document.querySelector('#post-detail-modal .modal-close').addEventListener('click', () => closeModal('post-detail-modal'));
@@ -611,7 +625,38 @@ document.getElementById('post-image-file').addEventListener('change', (e) => {
         document.getElementById('cancel-location-btn').addEventListener('click', () => {
             closeModal('location-picker-modal');
         });
+async function handleDeletePost(event) {
+            const postId = event.currentTarget.dataset.postId;
+            if (!confirm('本当にこの投稿を削除しますか？この操作は元に戻せません。')) {
+                return;
+            }
 
+            const token = localStorage.getItem('token');
+            if (!token) {
+                return alert('削除するにはログインが必要です。');
+            }
+
+            try {
+                const response = await fetch(`/api/posts/${postId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || '投稿の削除に失敗しました。');
+                }
+
+                alert('投稿を削除しました。');
+                closeModal('post-detail-modal');
+                fetchPosts(); // 投稿一覧を再読み込みして地図上のマーカーを更新
+            } catch (error) {
+                console.error('削除エラー:', error);
+                alert(`エラー: ${error.message}`);
+            }
+        }
     </script>
 </body>
 </html>

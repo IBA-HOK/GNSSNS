@@ -131,6 +131,40 @@ app.post('/api/posts', authenticateToken, (req, res) => {
         res.status(201).json({ id: this.lastID });
     });
 });
+app.delete('/api/posts/:id', authenticateToken, (req, res) => {
+    const post_id = req.params.id;
+    const user_id = req.user.id;
+
+    const getSql = `SELECT user_id FROM posts WHERE id = ?`;
+    db.get(getSql, [post_id], (err, row) => {
+        if (err) {
+            return res.status(500).json({ error: "データベースエラーが発生しました。" });
+        }
+        if (!row) {
+            return res.status(404).json({ error: "投稿が見つかりません。" });
+        }
+        if (row.user_id !== user_id) {
+            return res.status(403).json({ error: "この投稿を削除する権限がありません。" });
+        }
+
+        // 所有者であれば、まず関連するコメントを削除
+        const deleteCommentsSql = `DELETE FROM comments WHERE post_id = ?`;
+        db.run(deleteCommentsSql, [post_id], function(err) {
+            if (err) {
+                return res.status(500).json({ error: "コメントの削除中にエラーが発生しました。" });
+            }
+
+            // 次に投稿自体を削除
+            const deletePostSql = `DELETE FROM posts WHERE id = ?`;
+            db.run(deletePostSql, [post_id], function(err) {
+                if (err) {
+                    return res.status(500).json({ error: "投稿の削除中にエラーが発生しました。" });
+                }
+                res.status(200).json({ message: '投稿が正常に削除されました。' });
+            });
+        });
+    });
+});
 
 // Get comments for a post
 app.get('/api/posts/:id/comments', (req, res) => {
