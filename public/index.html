@@ -5,12 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>旅行記SNS</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-geosearch@3.11.0/dist/geosearch.css" />
+
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script src="https://cdn.jsdelivr.net/npm/exifr/dist/lite.umd.js"></script>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    <!-- exif-js is no longer needed -->
-    <style>
+    <script src="https://unpkg.com/leaflet-geosearch@3.11.0/dist/geosearch.umd.js"></script>
+    
+<style>
         html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; font-family: 'Inter', sans-serif; }
         #map, #picker-map { height: 100%; width: 100%; z-index: 10; }
         .leaflet-popup-content-wrapper { border-radius: 8px; }
@@ -31,11 +33,34 @@
             70% { box-shadow: 0 0 0 10px rgba(0, 128, 255, 0); }
             100% { box-shadow: 0 0 0 0px rgba(0, 128, 255, 0); }
         }
+        
+        /* --- ▼ここから修正▼ --- */
+        /* ライブラリのCSSを上書きするための、より強力なセレクタ指定 */
+        .leaflet-control-geosearch form input {
+            background-color: white !important;   /* ★背景色を白に強制 */
+            border: 1px solid #9ca3af !important; /* 境界線を少し濃いグレーに */
+            color: black !important;             /* パディングを調整 */
+        }
+        .leaflet-control-geosearch.bar form input::placeholder {
+            color: #6b7280 !important;             /* プレースホルダー文字色を濃いグレーに */
+        }
+        /* 検索結果リストはダークテーマのまま */
+        .leaflet-control-geosearch .results {
+            background-color: white !important; 
+            color : black !important;
+        }
+        .leaflet-control-geosearch .results > .active, 
+        .leaflet-control-geosearch .results > :hover {
+            background-color: lightgray !important; 
+        }
+        .leaflet-control-geosearch .results > li > a {
+            color: black !important;              
+        }
+        /* --- ▲ここまで修正▲ --- */
     </style>
 </head>
 <body class="bg-gray-900 text-white flex flex-col h-screen">
 
-    <!-- Header -->
     <header class="bg-gray-800/80 backdrop-blur-sm shadow-lg absolute top-0 left-0 right-0 p-4 flex justify-between items-center">
         <h1 class="text-xl font-bold">Travel Log SNS</h1>
         <div class="flex items-center space-x-4">
@@ -48,12 +73,10 @@
         </div>
     </header>
 
-    <!-- Main Content -->
     <main class="flex-grow relative">
         <div id="map"></div>
     </main>
 
-    <!-- Footer Timeline Slider -->
     <footer class="bg-gray-800/80 backdrop-blur-sm shadow-lg absolute bottom-0 left-0 right-0 p-4">
         <div class="max-w-4xl mx-auto">
             <label for="timeline" class="block mb-2 text-sm font-medium text-center">タイムライン: <span id="timeline-date">最新</span></label>
@@ -61,8 +84,6 @@
         </div>
     </footer>
 
-    <!-- Modals -->
-    <!-- Login Modal -->
     <div id="login-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center modal-overlay">
         <div class="modal-content bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-md">
             <h2 class="text-2xl font-bold mb-6 text-center">ログイン</h2>
@@ -75,7 +96,6 @@
         </div>
     </div>
     
-    <!-- Register Modal -->
     <div id="register-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center modal-overlay">
         <div class="modal-content bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-md">
             <h2 class="text-2xl font-bold mb-6 text-center">新規登録</h2>
@@ -88,7 +108,6 @@
         </div>
     </div>
 
-    <!-- New Post Modal -->
     <div id="new-post-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center modal-overlay">
         <div class="modal-content bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-lg">
             <h2 class="text-2xl font-bold mb-6 text-center">新規投稿を作成</h2>
@@ -111,18 +130,15 @@
         </div>
     </div>
 
-    <!-- Post Detail Modal -->
     <div id="post-detail-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center modal-overlay">
         <div id="post-detail-content" class="modal-content bg-gray-800 rounded-lg shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
-            <!-- Content will be injected by JavaScript -->
-        </div>
+            </div>
     </div>
     
-    <!-- Location Picker Modal -->
     <div id="location-picker-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center modal-overlay">
         <div class="modal-content bg-gray-800 p-6 rounded-lg shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col">
             <h2 class="text-xl font-bold mb-4 text-center">マップ上で投稿場所を選択してください</h2>
-            <p class="text-center text-gray-400 mb-4">地図上をクリックするとマーカーが置かれます。</p>
+            <p class="text-center text-gray-400 mb-4">地図を検索するか、クリックするとマーカーが置かれます。</p>
             <div id="picker-map" class="flex-grow w-full rounded-lg border border-gray-600"></div>
             <div class="mt-4 flex justify-end space-x-4">
                 <button id="cancel-location-btn" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-6 rounded-lg transition duration-300">キャンセル</button>
@@ -133,73 +149,6 @@
 
     <script>
 
-// --- Universal File Handler with Type Check ---
-async function handleFile(file) {
-    if (!file || !file.type.startsWith('image/')) {
-        alert('画像ファイルを選択してください。');
-        document.getElementById('post-image-file').value = '';
-        return;
-    }
-
-    const locationStatus = document.getElementById('location-status');
-    const submitButton = document.getElementById('submit-post-btn');
-    const imagePreview = document.getElementById('image-preview');
-
-    locationStatus.textContent = '写真を解析中...';
-    submitButton.disabled = true;
-    document.getElementById('post-lat').value = '';
-    document.getElementById('post-lng').value = '';
-
-    // 1. Client-side EXIF Parsing
-    try {
-        const gpsData = await exifr.gps(file);
-        if (gpsData && gpsData.latitude && gpsData.longitude) {
-            document.getElementById('post-lat').value = gpsData.latitude.toFixed(6);
-            document.getElementById('post-lng').value = gpsData.longitude.toFixed(6);
-            locationStatus.textContent = '✅ 写真のメタデータから位置情報を取得しました。';
-        } else {
-            locationStatus.textContent = '写真から位置情報を取得できませんでした。マップで場所を選択してください。';
-            openLocationPickerModal();
-        }
-    } catch (error) {
-        console.error("Client-side EXIF parsing error:", error);
-        locationStatus.textContent = 'EXIF情報の解析に失敗しました。マップで場所を選択してください。';
-        openLocationPickerModal();
-    }
-
-    // 2. Image Compression on Server
-    const formData = new FormData();
-    formData.append('photo', file);
-
-    try {
-        const response = await fetch('/api/upload-and-compress', {
-            method: 'POST',
-            body: formData
-        });
-        if (!response.ok) throw new Error((await response.json()).error || '画像のアップロードに失敗しました。');
-        
-        const result = await response.json();
-        imagePreview.src = result.image_url;
-        imagePreview.classList.remove('hidden');
-        
-        const latValue = document.getElementById('post-lat').value;
-        locationStatus.textContent = latValue
-            ? '✅ 写真の位置情報と圧縮が完了しました。'
-            : '✅ 画像の圧縮が完了しました。場所をマップで確定してください。';
-
-    } catch (error) {
-        console.error("Image processing error:", error);
-        locationStatus.textContent = `エラー: ${error.message}`;
-    } finally {
-        submitButton.disabled = false;
-    }
-}
-
-// --- Event Listener for File Input ---
-document.getElementById('post-image-file').addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file) handleFile(file);
-});
         // --- Global Variables ---
         const map = L.map('map').setView([35.6895, 139.6917], 5);
         let pickerMap;
@@ -310,8 +259,8 @@ document.getElementById('post-image-file').addEventListener('change', (e) => {
                 markers.push(marker);
             });
         }
-async function showPostDetail(postId) {
-             try {
+        async function showPostDetail(postId) {
+            try {
                 const post = allPosts.find(p => p.id === postId);
                 const commentsResponse = await fetch(`/api/posts/${postId}/comments`);
                 const comments = await commentsResponse.json();
@@ -341,10 +290,10 @@ async function showPostDetail(postId) {
                                 </div>
                             </div>
                             <div class="flex items-center space-x-2">
-                                <a href="https://www.google.com/maps?q=${post.lat},${post.lng}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 transition duration-300">
+                                <a href="https://maps.google.com/maps?q=${post.lat},${post.lng}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 transition duration-300" title="Googleマップで開く">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                 </a>
-                                ${currentUser && currentUser.username === post.user_name ? `<button id="delete-post-btn" data-post-id="${post.id}" class="text-red-500 hover:text-red-400 transition duration-300"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>` : ''}
+                                ${currentUser && currentUser.username === post.user_name ? `<button id="delete-post-btn" data-post-id="${post.id}" class="text-red-500 hover:text-red-400 transition duration-300" title="投稿を削除"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>` : ''}
                             </div>
                         </div>
                         <p class="text-gray-200 mb-6">${post.text}</p>
@@ -357,7 +306,7 @@ async function showPostDetail(postId) {
                             <input type="text" id="comment-text" placeholder="コメントを追加..." class="w-full bg-gray-700 text-white p-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
                         </form>
                     </div>
-                    <button class="modal-close absolute top-2 right-2 text-white bg-black bg-opacity-50 rounded-full p-1 leading-none">&times;</button>
+                    <button class="modal-close absolute top-2 right-2 text-white bg-black bg-opacity-50 rounded-full p-1 leading-none">×</button>
                 `;
                 openModal('post-detail-modal');
 
@@ -394,7 +343,37 @@ async function showPostDetail(postId) {
                 alert(error.message);
             }
         }
-        
+        async function handleDeletePost(event) {
+            const postId = event.currentTarget.dataset.postId;
+            if (!confirm('本当にこの投稿を削除しますか？この操作は元に戻せません。')) {
+                return;
+            }
+
+            const token = localStorage.getItem('token');
+            if (!token) {
+                return alert('削除するにはログインが必要です。');
+            }
+
+            try {
+                const response = await fetch(`/api/posts/${postId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || '投稿の削除に失敗しました。');
+                }
+
+                alert('投稿を削除しました。');
+                closeModal('post-detail-modal');
+                fetchPosts();
+            } catch (error) {
+                console.error('削除エラー:', error);
+                alert(`エラー: ${error.message}`);
+            }
+        }
+
         // --- Location Picker Functions ---
         async function openLocationPickerModal() {
              openModal('location-picker-modal');
@@ -406,30 +385,62 @@ async function showPostDetail(postId) {
                 if (!response.ok) throw new Error('IP API request failed');
                 const data = await response.json();
                 initializePickerMap(data.latitude, data.longitude);
-                locationStatus.textContent = '写真から位置を取得できませんでした。マップで場所を選択してください。';
+                locationStatus.textContent = '写真から位置を取得できませんでした。マップで場所を検索または選択してください。';
             } catch (error) {
                 console.error("IP-based location failed, defaulting to Tokyo:", error);
                 initializePickerMap(35.6895, 139.6917); // Default to Tokyo on failure
-                locationStatus.textContent = '位置情報の自動取得に失敗しました。マップで場所を選択してください。';
+                locationStatus.textContent = '位置情報の自動取得に失敗しました。マップで場所を検索または選択してください。';
             }
         }
+
+        /**
+         * 変更点: 地図の初期化関数に検索機能を追加
+         */
         function initializePickerMap(lat, lng) {
              if (!pickerMap) {
                 pickerMap = L.map('picker-map').setView([lat, lng], 10);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(pickerMap);
                 
-                pickerMap.on('click', function(e) {
+                // --- ▼ Geosearch (検索機能) の統合 ---
+                const provider = new GeoSearch.OpenStreetMapProvider();
+                const searchControl = new GeoSearch.GeoSearchControl({
+                    provider: provider,
+                    style: 'bar',
+                    showMarker: false, // マーカーは自分で管理
+                    showPopup: false,
+                    autoClose: true,
+                    searchLabel: '施設名や住所で検索...',
+                });
+                pickerMap.addControl(searchControl);
+                // --- ▲ Geosearch の統合 ---
+
+                // マーカーを設置する共通関数
+                function placeMarker(latlng) {
                     if (pickerMarker) {
                         pickerMap.removeLayer(pickerMarker);
                     }
-                    pickerMarker = L.marker(e.latlng).addTo(pickerMap);
+                    pickerMarker = L.marker(latlng).addTo(pickerMap);
+                    // 決定ボタンを有効化
                     document.getElementById('confirm-location-btn').disabled = false;
+                }
+                
+                // 地図クリックでマーカー設置
+                pickerMap.on('click', function(e) {
+                    placeMarker(e.latlng);
                 });
+
+                // 検索結果選択時にマーカーを設置
+                pickerMap.on('geosearch/showlocation', function(result) {
+                    const latlng = { lat: result.location.y, lng: result.location.x };
+                    placeMarker(latlng);
+                });
+
             } else {
                 pickerMap.setView([lat, lng], 10);
             }
-            // Invalidate size to ensure tiles load correctly in modal
+            // モーダル内で地図が正しく表示されるようにサイズを調整
             setTimeout(() => pickerMap.invalidateSize(), 100);
+            // 初期状態では決定ボタンを無効化
             document.getElementById('confirm-location-btn').disabled = true;
             if(pickerMarker) pickerMap.removeLayer(pickerMarker);
         }
@@ -540,9 +551,6 @@ async function showPostDetail(postId) {
         });
         document.getElementById('show-all-btn').addEventListener('click', fetchPosts);
 
-        // public/index.html の <script> タグ内の既存のイベントリスナーを置き換え
-
-// --- Image Upload and Client-side EXIF Parsing ---
         document.getElementById('post-image-file').addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -551,13 +559,11 @@ async function showPostDetail(postId) {
             const submitButton = document.getElementById('submit-post-btn');
             const imagePreview = document.getElementById('image-preview');
             
-            // UIを初期化
             locationStatus.textContent = '写真を解析中...';
             submitButton.disabled = true;
             document.getElementById('post-lat').value = '';
             document.getElementById('post-lng').value = '';
             
-            // --- Client-side EXIF Parsing ---
             try {
                 const gpsData = await exifr.gps(file);
                 if (gpsData && gpsData.latitude && gpsData.longitude) {
@@ -565,25 +571,20 @@ async function showPostDetail(postId) {
                     document.getElementById('post-lng').value = gpsData.longitude.toFixed(6);
                     locationStatus.textContent = '✅ 写真のメタデータから位置情報を取得しました。';
                 } else {
-                    // EXIFにGPS情報がなかった場合、マップピッカーを開く
                     locationStatus.textContent = '写真から位置情報を取得できませんでした。マップで場所を選択してください。';
                     openLocationPickerModal();
                 }
             } catch (error) {
-                // EXIF解析自体に失敗した場合もマップピッカーを開く
                 console.error("Client-side EXIF parsing error:", error);
                 locationStatus.textContent = 'EXIF情報の解析に失敗しました。マップで場所を選択してください。';
                 openLocationPickerModal();
             }
 
-            // --- Image Compression on Server ---
-            // 画像の圧縮とプレビュー表示はサーバーに任せる
             const formData = new FormData();
             formData.append('photo', file);
 
             try {
                 locationStatus.textContent = '画像をサーバーで圧縮中...';
-                // サーバーには圧縮とBase64化のみを依頼する
                 const response = await fetch('/api/upload-and-compress', {
                     method: 'POST',
                     body: formData
@@ -610,7 +611,7 @@ async function showPostDetail(postId) {
                 submitButton.disabled = false;
             }
         });        
-        // --- Location Picker Modal Logic ---
+        
         document.getElementById('confirm-location-btn').addEventListener('click', () => {
              if (pickerMarker) {
                  const { lat, lng } = pickerMarker.getLatLng();
@@ -625,39 +626,7 @@ async function showPostDetail(postId) {
         document.getElementById('cancel-location-btn').addEventListener('click', () => {
             closeModal('location-picker-modal');
         });
-async function handleDeletePost(event) {
-            const postId = event.currentTarget.dataset.postId;
-            if (!confirm('本当にこの投稿を削除しますか？この操作は元に戻せません。')) {
-                return;
-            }
 
-            const token = localStorage.getItem('token');
-            if (!token) {
-                return alert('削除するにはログインが必要です。');
-            }
-
-            try {
-                const response = await fetch(`/api/posts/${postId}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || '投稿の削除に失敗しました。');
-                }
-
-                alert('投稿を削除しました。');
-                closeModal('post-detail-modal');
-                fetchPosts(); // 投稿一覧を再読み込みして地図上のマーカーを更新
-            } catch (error) {
-                console.error('削除エラー:', error);
-                alert(`エラー: ${error.message}`);
-            }
-        }
     </script>
 </body>
 </html>
-
